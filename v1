@@ -1,0 +1,163 @@
+#include <Adafruit_NeoPixel.h>
+
+#define PIN_TASTER1    12      // Taster1 an Pin D12
+#define PIN_TASTER2    11      // Taster2 an Pin D11
+#define PIN_BREMSE     10      // Bremspedal an Pin D10
+#define PIN_NEOPIXEL   4       // NeoPixel an Pin D4
+#define NUM_LEDS       42      // Anzahl der LEDs
+
+#define COLOR_WHITE    255, 255, 255
+#define COLOR_RED      255, 0, 0
+#define COLOR_ORANGE   255, 165, 0
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, PIN_NEOPIXEL, NEO_GRB + NEO_KHZ800);
+
+int lastTaster1State = HIGH;    // Zum Entprellen von Taster1
+int lastTaster2State = HIGH;    // Zum Entprellen von Taster2
+unsigned long lastDebounceTime1 = 0;
+unsigned long lastDebounceTime2 = 0;
+unsigned long debounceDelay = 50; // Entprellzeit in Millisekunden
+
+int taster1PressCount = 0;       // Zähler für Taster1 Drücken
+int taster2PressCount = 0;       // Zähler für Taster2 Drücken
+bool bremsenAktiv = false;       // Status für Bremspedal
+
+void setup() {
+  Serial.begin(9600);
+  
+  pinMode(PIN_TASTER1, INPUT_PULLUP); // Taster1 als Eingang mit Pullup
+  pinMode(PIN_TASTER2, INPUT_PULLUP); // Taster2 als Eingang mit Pullup
+  pinMode(PIN_BREMSE, INPUT_PULLUP);  // Bremspedal als Eingang mit Pullup
+  
+  strip.begin(); // Initialisiere NeoPixel
+  strip.show();  // Setze alle LEDs auf aus
+}
+
+void loop() {
+  // Taster1
+  int readingTaster1 = digitalRead(PIN_TASTER1);
+  if (readingTaster1 == LOW && (millis() - lastDebounceTime1) > debounceDelay) {
+    lastDebounceTime1 = millis();
+    taster1PressCount++;
+  }
+
+  // Taster2
+  int readingTaster2 = digitalRead(PIN_TASTER2);
+  if (readingTaster2 == LOW && (millis() - lastDebounceTime2) > debounceDelay) {
+    lastDebounceTime2 = millis();
+    taster2PressCount++;
+  }
+
+  // Bremspedal
+  if (digitalRead(PIN_BREMSE) == LOW) {
+    if (!bremsenAktiv) {
+      bremsenAktiv = true;
+      setBrakeLights();
+      delay(3000); // Bremse für 3 Sekunden an
+      turnOffAllLeds(); // Danach alle LEDs ausschalten
+      bremsenAktiv = false;
+    }
+  }
+
+  // Verarbeiten der Taster1 Aktionen
+  if (taster1PressCount == 1) {
+    // Funktion 1: LEDs 1-28 in 40% neutralweiß, LEDs 29-42 in 40% rot
+    setLightsFunction1();
+  } else if (taster1PressCount == 2) {
+    // Funktion 2: LEDs 1-28 in 100% weiß, LEDs 29-42 in 40% rot
+    setLightsFunction2();
+  } else if (taster1PressCount >= 3) {
+    // Funktion 3: Alle LEDs ausschalten
+    turnOffAllLeds();
+    taster1PressCount = 0; // Zähler zurücksetzen
+  }
+
+  // Verarbeiten der Taster2 Aktionen
+  if (taster2PressCount == 1) {
+    // Funktion 1: Alle LEDs in 60% orange blinken
+    setBlinkingOrange();
+  } else if (taster2PressCount == 2) {
+    // Funktion 2: Stranddemo über alle Farben kontinuierlich
+    runStrandDemoContinuous();
+  } else if (taster2PressCount >= 3) {
+    // Funktion 3: Alle LEDs ausschalten
+    turnOffAllLeds();
+    taster2PressCount = 0; // Zähler zurücksetzen
+  }
+}
+
+void setLightsFunction1() {
+  for (int i = 0; i < 28; i++) {
+    strip.setPixelColor(i, strip.Color(102, 102, 102)); // 40% Weiß
+  }
+  for (int i = 28; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(102, 0, 0)); // 40% Rot
+  }
+  strip.show();
+}
+
+void setLightsFunction2() {
+  for (int i = 0; i < 28; i++) {
+    strip.setPixelColor(i, strip.Color(255, 255, 255)); // 100% Weiß
+  }
+  for (int i = 28; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(102, 0, 0)); // 40% Rot
+  }
+  strip.show();
+}
+
+void setBrakeLights() {
+  for (int i = 28; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(255, 0, 0)); // 100% Rot
+  }
+  strip.show();
+}
+
+void setBlinkingOrange() {
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(255, 165, 0)); // Orange
+  }
+  strip.show();
+  delay(500);
+  turnOffAllLeds();
+  delay(500);
+}
+
+void runStrandDemoContinuous() {
+  // Durchläuft kontinuierlich einen Regenbogen-Effekt
+  for (int j = 0; j < NUM_LEDS; j++) {
+    for (int i = 0; i < NUM_LEDS; i++) {
+      strip.setPixelColor(i, Wheel(((i * 256 / NUM_LEDS) + j) & 255));
+    }
+    strip.show();
+    delay(10); // Geschwindigkeit des Übergangs
+  }
+}
+
+// Helferfunktion für den Regenbogen-Effekt
+byte* Wheel(byte WheelPos) {
+  static byte color[3];
+  if (WheelPos < 85) {
+    color[0] = WheelPos * 3;
+    color[1] = 255 - WheelPos * 3;
+    color[2] = 0;
+  } else if (WheelPos < 170) {
+    WheelPos -= 85;
+    color[0] = 255 - WheelPos * 3;
+    color[1] = 0;
+    color[2] = WheelPos * 3;
+  } else {
+    WheelPos -= 170;
+    color[0] = 0;
+    color[1] = WheelPos * 3;
+    color[2] = 255 - WheelPos * 3;
+  }
+  return color;
+}
+
+void turnOffAllLeds() {
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(0, 0, 0)); // Aus
+  }
+  strip.show();
+}
