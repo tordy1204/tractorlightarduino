@@ -1,0 +1,159 @@
+#include <Adafruit_NeoPixel.h>
+
+#define PIN            4    // Pin für NeoPixel
+#define NUM_LEDS      42    // Anzahl der NeoPixel
+#define BUTTON1_PIN   12   // Taster 1 an PIN D12
+#define BUTTON2_PIN   11   // Taster 2 an PIN D11
+#define BUTTON3_PIN   10   // Taster 3 an PIN D10
+#define BUTTON4_PIN   9    // Taster 4 an PIN D09
+#define BRAKE_PIN     8    // Bremspedal an PIN D08
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, PIN, NEO_GRB + NEO_KHZ800);
+
+bool fahrlichtAktiv = true;
+bool fernlichtAktiv = false;
+bool warnblinklichtAktiv = false;
+bool strandTestAktiv = false;
+bool bremslichtAktiv = false;
+unsigned long lastBremslichtMillis = 0;
+
+void setup() {
+  // Initialisiere NeoPixel
+  strip.begin();
+  strip.show(); // LEDs ausschalten
+
+  // Initialisiere Taster-Pins mit internem Pullup
+  pinMode(BUTTON1_PIN, INPUT_PULLUP);
+  pinMode(BUTTON2_PIN, INPUT_PULLUP);
+  pinMode(BUTTON3_PIN, INPUT_PULLUP);
+  pinMode(BUTTON4_PIN, INPUT_PULLUP);
+  pinMode(BRAKE_PIN, INPUT);
+
+  // Setze das Fahrlicht als Standard
+  setFahrlicht();
+}
+
+void loop() {
+  // Lese den Zustand der Taster
+  if (digitalRead(BUTTON1_PIN) == LOW) {
+    delay(200); // Debounce Zeit
+    if (fernlichtAktiv) {
+      setFahrlicht();
+    } else {
+      setFernlicht();
+    }
+    fernlichtAktiv = !fernlichtAktiv;
+  }
+
+  if (digitalRead(BUTTON2_PIN) == LOW) {
+    delay(200); // Debounce Zeit
+    if (warnblinklichtAktiv) {
+      setFahrlicht();
+    } else {
+      setWarnblinklicht();
+    }
+    warnblinklichtAktiv = !warnblinklichtAktiv;
+  }
+
+  if (digitalRead(BUTTON3_PIN) == LOW) {
+    delay(200); // Debounce Zeit
+    if (strandTestAktiv) {
+      setFahrlicht();
+    } else {
+      startStrandTest();
+    }
+    strandTestAktiv = !strandTestAktiv;
+  }
+
+  if (digitalRead(BUTTON4_PIN) == LOW) {
+    delay(200); // Debounce Zeit
+    ausschalten();
+  }
+
+  // Bremslicht-Logik
+  int bremsStatus = digitalRead(BRAKE_PIN);
+  if (bremsStatus == LOW) {
+    // Bremspedal gedrückt, Bremslicht aktivieren (schnelles Blinken für 3s)
+    if (!bremslichtAktiv) {
+      bremslichtAktiv = true;
+      lastBremslichtMillis = millis();
+      blinkBremslicht();
+    }
+  } else {
+    bremslichtAktiv = false;
+    strip.show(); // Alle LEDs ausschalten, wenn kein Bremslicht aktiv ist
+  }
+
+  // Bremslicht blinkt nur für 3 Sekunden
+  if (bremslichtAktiv && millis() - lastBremslichtMillis >= 3000) {
+    bremslichtAktiv = false;
+    strip.show(); // Alle LEDs ausschalten, wenn Bremslicht vorbei ist
+  }
+}
+
+void setFahrlicht() {
+  // LEDs 1-28 in 25% neutralweiß, LEDs 29-42 in 25% rot
+  for (int i = 0; i < 28; i++) {
+    strip.setPixelColor(i, strip.Color(64, 64, 64)); // 25% Weiß
+  }
+  for (int i = 28; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(64, 0, 0)); // 25% Rot
+  }
+  strip.show();
+}
+
+void setFernlicht() {
+  // LEDs 1-28 in 100% Weiß, LEDs 29-42 in 25% Rot
+  for (int i = 0; i < 28; i++) {
+    strip.setPixelColor(i, strip.Color(255, 255, 255)); // 100% Weiß
+  }
+  for (int i = 28; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(64, 0, 0)); // 25% Rot
+  }
+  strip.show();
+}
+
+void setWarnblinklicht() {
+  // LEDs 1-28 in 100% Weiß, LEDs 29-42 in 25% Rot (Blinkend)
+  for (int i = 0; i < 28; i++) {
+    strip.setPixelColor(i, strip.Color(255, 255, 255)); // 100% Weiß
+  }
+  for (int i = 28; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(64, 0, 0)); // 25% Rot
+  }
+  strip.show();
+  delay(500); // Ein kurzer Blink-Delay, dann wieder aus
+  ausschalten();
+  delay(500); // Aus-Delay für Blinkeffekt
+  strip.show();
+}
+
+void blinkBremslicht() {
+  // Schnell blinken der LEDs 29-42 in 100% Rot für 3 Sekunden
+  unsigned long currentMillis = millis();
+  if (currentMillis - lastBremslichtMillis < 3000) {
+    for (int i = 28; i < NUM_LEDS; i++) {
+      strip.setPixelColor(i, strip.Color(255, 0, 0)); // 100% Rot
+    }
+    strip.show();
+    delay(100);
+    ausschalten();
+    delay(100);
+  }
+}
+
+void startStrandTest() {
+  // Alle LEDs alle Farben in einem kontinuierlichen Muster
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(random(255), random(255), random(255)));
+  }
+  strip.show();
+}
+
+void ausschalten() {
+  // Alle LEDs ausschalten
+  for (int i = 0; i < NUM_LEDS; i++) {
+    strip.setPixelColor(i, strip.Color(0, 0, 0));
+  }
+  strip.show();
+}
